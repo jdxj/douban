@@ -9,7 +9,6 @@ import (
 
 var DB *sql.DB
 
-// root:18r10q4jhy@tcp(mysql.aaronkir.xyz:3306)/dbname?charset=utf8mb4&loc=Local&parseTime=true
 func init() {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:3306)/%s?charset=utf8mb4&loc=Local&parseTime=true",
 		"root",
