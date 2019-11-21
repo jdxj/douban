@@ -1,4 +1,4 @@
-package douban
+package main
 
 // 任务分类:
 //     1. 抓标签, 获取每个标签下的书 (影音) 的集合
