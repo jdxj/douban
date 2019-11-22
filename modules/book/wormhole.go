@@ -248,9 +248,22 @@ func (w *Wormhole) genBook(url string, client *http.Client) (*Book, error) {
 	if err != nil {
 		return nil, err
 	}
-	// todo: 抓信息
-	_ = doc
 
 	book := new(Book)
+
+	rawTitle := doc.Find("h1").Text()
+	title := utils.CleanAndJoin(rawTitle, "")
+	if title == "" {
+		return nil, fmt.Errorf("found invalid title, url: %s", url)
+	}
+	book.Title = title
+
+	rawInfo := doc.Find("#info").Text()
+	info := new(Info)
+	info.Unmarshal(rawInfo)
+
+	book.Author = info.Author
+	book.Press = info.Press
+	book.Info = info
 	return book, nil
 }
