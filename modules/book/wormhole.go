@@ -3,6 +3,7 @@ package book
 import (
 	"douban/modules"
 	"douban/utils"
+	"douban/utils/logs"
 	"fmt"
 	"net/http"
 	"time"
@@ -32,7 +33,7 @@ func (w *Wormhole) CaptureTags() {
 
 	req, err := http.NewRequest("GET", TagsPage, nil)
 	if err != nil {
-		utils.Logger.Error("can not create tags page req: %s", err)
+		logs.Logger.Error("can not create tags page req: %s", err)
 		return
 	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
@@ -40,13 +41,13 @@ func (w *Wormhole) CaptureTags() {
 	client := modules.GenHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
-		utils.Logger.Error("access tags page fail: %s", err)
+		logs.Logger.Error("access tags page fail: %s", err)
 		return
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		utils.Logger.Error("can not create goquery from tags page%s", err)
+		logs.Logger.Error("can not create goquery from tags page%s", err)
 		return
 	}
 
@@ -63,25 +64,26 @@ func (w *Wormhole) CaptureTags() {
 	pause(PauseDur)
 
 	for _, url := range tagURLs {
-		utils.Logger.Debug("CaptureBookURL: %s", url)
+		logs.Logger.Debug("CaptureBookURL: %s", url)
 		w.CaptureBookURL(url)
 	}
 
+	// todo: 处理中断信号
 	utils.DB.Close()
-	utils.Logger.Info("finish")
+	logs.Logger.Info("finish")
 }
 
 func (w *Wormhole) CaptureBookURL(tagURL string) {
 	stmtInsert, err := utils.DB.Prepare("insert into book_url (url) values (?)")
 	if err != nil {
-		utils.Logger.Error("prepare 'insert into book_url (url) values (?)' fail: %s", err)
+		logs.Logger.Error("prepare 'insert into book_url (url) values (?)' fail: %s", err)
 		return
 	}
 	defer stmtInsert.Close()
 
 	stmtQuery, err := utils.DB.Prepare("select id from book_url where url=?")
 	if err != nil {
-		utils.Logger.Error("prepare 'select id from book_url where url=?' fail: %s", err)
+		logs.Logger.Error("prepare 'select id from book_url where url=?' fail: %s", err)
 		return
 	}
 	defer stmtQuery.Close()
@@ -90,24 +92,24 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 
 	for i := 0; i < 20*PageLimit; i += 20 {
 		url := tagURL + fmt.Sprintf("?start=%d&type=T", i)
-		utils.Logger.Debug("in cap book url:", url)
+		logs.Logger.Debug("in cap book url:", url)
 
 		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			utils.Logger.Error("can not create '%s'req: %s", url, err)
+			logs.Logger.Error("can not create '%s'req: %s", url, err)
 			continue
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			utils.Logger.Error("access '%s' fail: %s", url, err)
+			logs.Logger.Error("access '%s' fail: %s", url, err)
 			continue
 		}
 
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
-			utils.Logger.Error("can not create '%s' goquery: %s", err)
+			logs.Logger.Error("can not create '%s' goquery: %s", err)
 			continue
 		}
 
@@ -119,17 +121,18 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 				// 去重
 				rows, err := stmtQuery.Query(bookURL)
 				if err != nil {
-					utils.Logger.Error("查重失败: %s", err)
+					logs.Logger.Error("查重失败: %s", err)
 					return
 				}
+				defer rows.Close()
 
 				if rows.Next() {
-					utils.Logger.Debug("found 重复 url: %s", bookURL)
+					logs.Logger.Debug("found 重复 url: %s", bookURL)
 					return
 				}
 
 				if _, err = stmtInsert.Exec(bookURL); err != nil {
-					utils.Logger.Error("insert fail, url: %s, err: %s", bookURL, err)
+					logs.Logger.Error("insert fail, url: %s, err: %s", bookURL, err)
 				}
 			}
 		})
