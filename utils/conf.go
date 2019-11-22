@@ -35,3 +35,16 @@ func GetDBConf() (*DBConf, error) {
 
 	return dbConf, nil
 }
+
+type ModeConf struct {
+	Mode int `ini:"mode"`
+}
+
+func GetModeConf() (*ModeConf, error) {
+	modeConf := new(ModeConf)
+	if err := iniFile.Section("mode").MapTo(modeConf); err != nil {
+		return nil, err
+	}
+
+	return modeConf, nil
+}

@@ -15,3 +15,11 @@ func (b *Book) ToScan() []interface{} {
 	row = append(row, &b.Press)
 	return row
 }
+
+func (b *Book) ToInsert() []interface{} {
+	var row []interface{}
+	row = append(row, &b.Title)
+	row = append(row, &b.Author)
+	row = append(row, &b.Press)
+	return row
+}

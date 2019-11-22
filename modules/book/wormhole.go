@@ -22,9 +22,15 @@ const (
 	CaptureBookMode
 )
 
-func NewWormhole() *Wormhole {
-	w := &Wormhole{}
-	return w
+func NewWormhole() (*Wormhole, error) {
+	modeConf, err := utils.GetModeConf()
+	if err != nil {
+		return nil, err
+	}
+	w := &Wormhole{
+		Mode: modeConf.Mode,
+	}
+	return w, nil
 }
 
 type Wormhole struct {
@@ -181,6 +187,14 @@ func (w *Wormhole) CaptureBook() {
 	}
 	defer stmtQuery.Close()
 
+	stmtInsert, err := utils.DB.Prepare("insert into book (title, author, press) values (?,?,?)")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer stmtInsert.Close()
+
+	client := modules.GenHTTPClient()
 	for i := 0; i < total; i++ {
 		// 只有一行
 		row, err := stmtQuery.Query(i, 1)
@@ -204,7 +218,17 @@ func (w *Wormhole) CaptureBook() {
 			continue
 		}
 
-		// todo: 抓 book 信息
+		book, err := w.genBook(url, client)
+		if err != nil {
+			logs.Logger.Error("Failed to generate book, url: %s, error: %s", url, err)
+			continue
+		}
+
+		if _, err = stmtInsert.Exec(book.ToInsert()...); err != nil {
+			logs.Logger.Error("Insert into table failed, url: %s, error: %s", url, err)
+		}
+
+		utils.Pause(utils.Pause5s)
 	}
 }
 
