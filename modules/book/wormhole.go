@@ -30,22 +30,15 @@ func (w *Wormhole) CaptureTags() {
 	// todo: 是否要写入数据库中?
 	var tagURLs []string
 
-	req, err := modules.NewRequest("GET", TagsPage, nil)
+	resp, err := modules.NewRequestAndDo("GET", TagsPage, nil)
 	if err != nil {
-		logs.Logger.Error("can not create tags page req: %s", err)
-		return
-	}
-
-	client := modules.GenHTTPClient()
-	resp, err := client.Do(req)
-	if err != nil {
-		logs.Logger.Error("access tags page fail: %s", err)
+		logs.Logger.Error("Access tags page failed: %s", err)
 		return
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
-		logs.Logger.Error("can not create goquery from tags page%s", err)
+		logs.Logger.Error("Can not create goquery from tags page%s", err)
 		return
 	}
 
@@ -66,47 +59,46 @@ func (w *Wormhole) CaptureTags() {
 		w.CaptureBookURL(url)
 	}
 
-	// todo: 处理中断信号
+	// todo: 在中断信号中处理
 	utils.DB.Close()
-	logs.Logger.Info("finish")
+	logs.Logger.Info("Capture finish")
 }
 
 func (w *Wormhole) CaptureBookURL(tagURL string) {
 	stmtInsert, err := utils.DB.Prepare("insert into book_url (url) values (?)")
 	if err != nil {
-		logs.Logger.Error("prepare 'insert into book_url (url) values (?)' fail: %s", err)
+		logs.Logger.Error("Prepare 'insert into book_url (url) values (?)' failed: %s", err)
 		return
 	}
 	defer stmtInsert.Close()
 
 	stmtQuery, err := utils.DB.Prepare("select id from book_url where url=?")
 	if err != nil {
-		logs.Logger.Error("prepare 'select id from book_url where url=?' fail: %s", err)
+		logs.Logger.Error("Prepare 'select id from book_url where url=?' failed: %s", err)
 		return
 	}
 	defer stmtQuery.Close()
 
 	client := modules.GenHTTPClient()
-
 	for i := 0; i < 20*PageLimit; i += 20 {
 		url := tagURL + fmt.Sprintf("?start=%d&type=T", i)
-		logs.Logger.Debug("in cap book url:", url)
+		logs.Logger.Debug("In capture book url:", url)
 
 		req, err := modules.NewRequest("GET", url, nil)
 		if err != nil {
-			logs.Logger.Error("can not create '%s'req: %s", url, err)
+			logs.Logger.Error("Can not create '%s' req: %s", url, err)
 			continue
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
-			logs.Logger.Error("access '%s' fail: %s", url, err)
+			logs.Logger.Error("Access '%s' fail: %s", url, err)
 			continue
 		}
 
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		if err != nil {
-			logs.Logger.Error("can not create '%s' goquery: %s", err)
+			logs.Logger.Error("Can not create '%s' goquery: %s", err)
 			continue
 		}
 
@@ -118,18 +110,18 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 				// 去重
 				rows, err := stmtQuery.Query(bookURL)
 				if err != nil {
-					logs.Logger.Error("查重失败: %s", err)
+					logs.Logger.Error("Check for duplicate url failure: %s", err)
 					return
 				}
 				defer rows.Close()
 
 				if rows.Next() {
-					logs.Logger.Debug("found 重复 url: %s", bookURL)
+					logs.Logger.Debug("Found duplicate url: %s", bookURL)
 					return
 				}
 
 				if _, err = stmtInsert.Exec(bookURL); err != nil {
-					logs.Logger.Error("insert fail, url: %s, err: %s", bookURL, err)
+					logs.Logger.Error("Insert failed, url: %s, err: %s", bookURL, err)
 				}
 			}
 		})
