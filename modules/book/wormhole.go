@@ -5,7 +5,6 @@ import (
 	"douban/utils"
 	"douban/utils/logs"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -31,12 +30,11 @@ func (w *Wormhole) CaptureTags() {
 	// todo: 是否要写入数据库中?
 	var tagURLs []string
 
-	req, err := http.NewRequest("GET", TagsPage, nil)
+	req, err := modules.NewRequest("GET", TagsPage, nil)
 	if err != nil {
 		logs.Logger.Error("can not create tags page req: %s", err)
 		return
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
 
 	client := modules.GenHTTPClient()
 	resp, err := client.Do(req)
@@ -94,12 +92,11 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 		url := tagURL + fmt.Sprintf("?start=%d&type=T", i)
 		logs.Logger.Debug("in cap book url:", url)
 
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := modules.NewRequest("GET", url, nil)
 		if err != nil {
 			logs.Logger.Error("can not create '%s'req: %s", url, err)
 			continue
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36")
 
 		resp, err := client.Do(req)
 		if err != nil {

@@ -41,3 +41,13 @@ func NewRequest(method, url string, body io.Reader) (*http.Request, error) {
 	req.Header.Set(UserAgent, RandUserAgent())
 	return req, nil
 }
+
+func NewRequestAndDo(method, url string, body io.Reader) (*http.Response, error) {
+	req, err := NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+
+	client := GenHTTPClient()
+	return client.Do(req)
+}
