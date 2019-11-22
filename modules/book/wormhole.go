@@ -5,7 +5,6 @@ import (
 	"douban/utils"
 	"douban/utils/logs"
 	"fmt"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -15,7 +14,6 @@ const (
 	TagsPage     = "https://book.douban.com/tag/?view=cloud"
 	TagURLPrefix = "https://book.douban.com"
 	PageLimit    = 400
-	PauseDur     = 5 * time.Second
 )
 
 func NewWormhole() *Wormhole {
@@ -52,7 +50,7 @@ func (w *Wormhole) CaptureTags() {
 	})
 	resp.Body.Close()
 
-	pause(PauseDur)
+	utils.Pause(utils.Pause5s)
 
 	for _, url := range tagURLs {
 		logs.Logger.Debug("CaptureBookURL: %s", url)
@@ -131,10 +129,6 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 			break
 		}
 
-		pause(PauseDur)
+		utils.Pause(utils.Pause5s)
 	}
-}
-
-func pause(dur time.Duration) {
-	time.Sleep(dur)
 }
