@@ -5,6 +5,7 @@ import (
 	"douban/utils"
 	"douban/utils/logs"
 	"fmt"
+	"net/http"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -16,12 +17,32 @@ const (
 	PageLimit    = 400
 )
 
+const (
+	CaptureBookURLMode = iota + 1
+	CaptureBookMode
+)
+
 func NewWormhole() *Wormhole {
 	w := &Wormhole{}
 	return w
 }
 
 type Wormhole struct {
+	Mode int
+}
+
+func (w *Wormhole) Run() {
+	switch w.Mode {
+	case CaptureBookURLMode:
+		w.CaptureTags()
+	case CaptureBookMode:
+		w.CaptureBook()
+	default:
+		logs.Logger.Warn("Invalid mode of operation")
+	}
+
+	// todo: 在中断信号中处理
+	utils.DB.Close()
 }
 
 func (w *Wormhole) CaptureTags() {
@@ -57,8 +78,6 @@ func (w *Wormhole) CaptureTags() {
 		w.CaptureBookURL(url)
 	}
 
-	// todo: 在中断信号中处理
-	utils.DB.Close()
 	logs.Logger.Info("Capture finish")
 }
 
@@ -131,4 +150,83 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 
 		utils.Pause(utils.Pause5s)
 	}
+}
+
+// CaptureBook 该方法需要从数据库中读取 book url
+func (w *Wormhole) CaptureBook() {
+	rows, err := utils.DB.Query("select count(*) from book_url")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+
+	var total int
+	for rows.Next() {
+		if err = rows.Scan(&total); err != nil {
+			logs.Logger.Error("%s", err)
+			return
+		}
+	}
+	rows.Close()
+
+	if total <= 0 {
+		logs.Logger.Warn("No book url available")
+		return
+	}
+
+	stmtQuery, err := utils.DB.Prepare("select url from book_url order by id limit ?,?")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer stmtQuery.Close()
+
+	for i := 0; i < total; i++ {
+		// 只有一行
+		row, err := stmtQuery.Query(i, 1)
+		if err != nil {
+			logs.Logger.Error("%s", err)
+			// todo: 是否继续?
+			return
+		}
+
+		var url string
+		for row.Next() {
+			if err = row.Scan(&url); err != nil {
+				logs.Logger.Error("%s", err)
+				row.Close()
+				return
+			}
+		}
+		row.Close()
+
+		if url == "" {
+			continue
+		}
+
+		// todo: 抓 book 信息
+	}
+}
+
+func (w *Wormhole) genBook(url string, client *http.Client) (*Book, error) {
+	req, err := modules.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	// todo: 抓信息
+	_ = doc
+
+	book := new(Book)
+	return book, nil
 }
