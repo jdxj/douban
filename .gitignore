@@ -16,3 +16,6 @@
 
 # Go ini
 *.ini
+
+# Logger
+*.log
