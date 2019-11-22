@@ -83,3 +83,8 @@ func TestSQL(t *testing.T) {
 		fmt.Println("not found")
 	}
 }
+
+func TestRandUserAgent(t *testing.T) {
+	ua := RandUserAgent()
+	fmt.Println(ua)
+}

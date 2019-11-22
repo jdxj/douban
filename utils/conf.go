@@ -20,7 +20,18 @@ func init() {
 	iniFile = file
 }
 
-func DBConfig() *ini.Section {
-	sec := iniFile.Section("db")
-	return sec
+type DBConf struct {
+	Username string `ini:"username"`
+	Password string `ini:"password"`
+	Host     string `ini:"host"`
+	DBName   string `ini:"dbName"`
+}
+
+func GetDBConf() (*DBConf, error) {
+	dbConf := new(DBConf)
+	if err := iniFile.Section("db").MapTo(dbConf); err != nil {
+		return nil, err
+	}
+
+	return dbConf, nil
 }
