@@ -241,11 +241,6 @@ func (w *Wormhole) CaptureBook() {
 
 	client := modules.GenHTTPClient()
 	for i := start; i < total; i++ {
-		// todo: debug
-		if i == 120 {
-			logs.Logger.Debug("insert 120 finish")
-			return
-		}
 		utils.Pause(utils.Pause5s)
 
 		// 只有一行
