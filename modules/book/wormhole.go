@@ -2,10 +2,13 @@ package book
 
 import (
 	"douban/modules"
+	"douban/modules/types"
 	"douban/utils"
 	"douban/utils/logs"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -88,12 +91,12 @@ func (w *Wormhole) CaptureTags() {
 }
 
 func (w *Wormhole) CaptureBookURL(tagURL string) {
-	stmtInsert, err := utils.DB.Prepare("insert into book_url (url) values (?)")
+	stmtBookInsert, err := utils.DB.Prepare("insert into book_url (url) values (?)")
 	if err != nil {
 		logs.Logger.Error("Prepare 'insert into book_url (url) values (?)' failed: %s", err)
 		return
 	}
-	defer stmtInsert.Close()
+	defer stmtBookInsert.Close()
 
 	stmtQuery, err := utils.DB.Prepare("select id from book_url where url=?")
 	if err != nil {
@@ -143,7 +146,7 @@ func (w *Wormhole) CaptureBookURL(tagURL string) {
 					return
 				}
 
-				if _, err = stmtInsert.Exec(bookURL); err != nil {
+				if _, err = stmtBookInsert.Exec(bookURL); err != nil {
 					logs.Logger.Error("Insert failed, url: %s, err: %s", bookURL, err)
 				}
 			}
@@ -166,7 +169,7 @@ func (w *Wormhole) CaptureBook() {
 		return
 	}
 
-	var total int
+	var total int64
 	for rows.Next() {
 		if err = rows.Scan(&total); err != nil {
 			logs.Logger.Error("%s", err)
@@ -187,15 +190,24 @@ func (w *Wormhole) CaptureBook() {
 	}
 	defer stmtQuery.Close()
 
-	stmtInsert, err := utils.DB.Prepare("insert into book (title, author, press) values (?,?,?)")
+	stmtBookInsert, err := utils.DB.Prepare("insert into book (title, author, press) values (?,?,?)")
 	if err != nil {
 		logs.Logger.Error("%s", err)
 		return
 	}
-	defer stmtInsert.Close()
+	defer stmtBookInsert.Close()
+
+	stmtOpiInsert, err := utils.DB.Prepare("insert into opinion (score, amount, one, two, three, four, five, type, ref)")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer stmtOpiInsert.Close()
 
 	client := modules.GenHTTPClient()
-	for i := 0; i < total; i++ {
+	for i := int64(0); i < total; i++ {
+		utils.Pause(utils.Pause5s)
+
 		// 只有一行
 		row, err := stmtQuery.Query(i, 1)
 		if err != nil {
@@ -224,11 +236,22 @@ func (w *Wormhole) CaptureBook() {
 			continue
 		}
 
-		if _, err = stmtInsert.Exec(book.ToInsert()...); err != nil {
+		result, err := stmtBookInsert.Exec(book.ToInsert()...)
+		if err != nil {
 			logs.Logger.Error("Insert into table failed, url: %s, error: %s", url, err)
+			continue
 		}
 
-		utils.Pause(utils.Pause5s)
+		book.ID, err = result.LastInsertId()
+		if err != nil {
+			logs.Logger.Error("Get last insert id failed, err: %s", err)
+			continue
+		}
+
+		_, err = stmtOpiInsert.Exec(book.Opinion.ToInsert())
+		if err != nil {
+			logs.Logger.Error("Insert into opinion failed, err: %s", err)
+		}
 	}
 }
 
@@ -249,6 +272,7 @@ func (w *Wormhole) genBook(url string, client *http.Client) (*Book, error) {
 		return nil, err
 	}
 
+	// book
 	book := new(Book)
 
 	rawTitle := doc.Find("h1").Text()
@@ -258,12 +282,68 @@ func (w *Wormhole) genBook(url string, client *http.Client) (*Book, error) {
 	}
 	book.Title = title
 
-	rawInfo := doc.Find("#info").Text()
+	// info
+	w.genInfo(book, doc)
+	// opinion
+	w.genOpinion(book, doc)
+
+	return book, nil
+}
+
+func (w *Wormhole) genInfo(book *Book, doc *goquery.Document) {
 	info := new(Info)
+	book.Info = info
+
+	rawInfo := doc.Find("#info").Text()
 	info.Unmarshal(rawInfo)
 
 	book.Author = info.Author
 	book.Press = info.Press
-	book.Info = info
-	return book, nil
+}
+
+func (w *Wormhole) genOpinion(book *Book, doc *goquery.Document) {
+	opinion := new(modules.Opinion)
+	book.Opinion = opinion
+
+	rawScore := doc.Find(".rating_num").Text()
+	rawScore = utils.CleanAndJoin(rawScore, "")
+	score, err := strconv.ParseFloat(rawScore, 64)
+	if err != nil {
+		logs.Logger.Warn("rawScore: %s, err: %s", rawScore, err)
+	}
+	opinion.Score = score
+
+	rawAmount := doc.Find(".rating_people").Text()
+	rawAmount = utils.CleanAndJoin(rawAmount, "")
+	rawAmount = strings.ReplaceAll(rawAmount, "人评价", "")
+	amount, err := strconv.ParseInt(rawAmount, 10, 64)
+	if err != nil {
+		logs.Logger.Warn("rawAmount: %s, err: %s", rawAmount, err)
+	}
+	opinion.Amount = amount
+
+	opinion.Type = types.B
+	opinion.Ref = &book.ID
+
+	doc.Find(".rating_per").Each(func(i int, sel *goquery.Selection) {
+		rawPer := utils.CleanAndJoin(sel.Text(), "")
+		rawPer = strings.ReplaceAll(rawPer, "%", "")
+		per, err := strconv.ParseFloat(rawPer, 64)
+		if err != nil {
+			logs.Logger.Warn("rawPer: %s, err: %s", rawPer, err)
+		}
+
+		switch i {
+		case 0:
+			opinion.Five = per
+		case 1:
+			opinion.Four = per
+		case 2:
+			opinion.Three = per
+		case 3:
+			opinion.Two = per
+		case 4:
+			opinion.One = per
+		}
+	})
 }

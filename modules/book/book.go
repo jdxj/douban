@@ -1,19 +1,20 @@
 package book
 
 import (
+	"douban/modules"
 	"douban/utils"
 	"douban/utils/logs"
 	"strings"
 )
 
 type Book struct {
-	ID     int
+	ID     int64
 	Title  string
 	Author string
 	Press  string
 
-	Info   *Info
-	Starts *Stars
+	Info    *Info
+	Opinion *modules.Opinion
 }
 
 func (b *Book) ToScan() []interface{} {
@@ -70,9 +71,31 @@ type Info struct {
 
 // Unmarshal 用于从 content 解析数据到 info 中.
 func (info *Info) Unmarshal(rawInfo string) {
-	rows := utils.CleanAndSplit(rawInfo)
-	logs.Logger.Debug("length:", len(rows))
-	logs.Logger.Debug("rows:", rows)
+	rawRows := utils.CleanAndSplit(rawInfo)
+	rawRows = info.clearColon(rawRows)
+	logs.Logger.Debug("length: %d, rawRows: %v", len(rawRows), rawRows)
+
+	var rows []string
+	var kv string
+	for i, meta := range rawRows {
+		if i == 0 && kv == "" { // 初始化第一个
+			kv = meta
+			continue
+		}
+
+		if !strings.HasSuffix(meta, ":") {
+			kv += meta
+		} else {
+			rows = append(rows, kv)
+			kv = meta
+		}
+
+		if i == len(rawRows)-1 { // 追加最后一个
+			rows = append(rows, kv)
+		}
+	}
+	logs.Logger.Debug("length: %d, rows: %v", len(rows), rows)
+
 	for _, row := range rows {
 		cols := strings.Split(row, ":")
 		if len(cols) < 2 {
@@ -110,11 +133,29 @@ func (info *Info) Unmarshal(rawInfo string) {
 		case "统一书号":
 			info.Number = val
 		default:
-			logs.Logger.Warn("Discover new properties")
+			logs.Logger.Warn("Discover new properties: %s", key)
 		}
 	}
 }
 
-type Stars struct {
-	One, Two, Three, Four, Five float64
+// clearColon 用于清除属性值中的冒号, 防止与属性名后面跟随的冒号冲突.
+// 例: `原作名: Principles: Life and Work` 将变成: `原作名: Principles@ Life and Work`
+func (info *Info) clearColon(rows []string) []string {
+	var last bool
+	for i, meta := range rows {
+		if i == 0 {
+			// 默认第一个是带有冒号的属性名
+			last = true
+			continue
+		}
+
+		if last && strings.HasSuffix(meta, ":") {
+			rows[i] = strings.ReplaceAll(meta, ":", "@")
+			last = false
+		} else {
+			last = strings.HasSuffix(meta, ":")
+		}
+	}
+
+	return rows
 }
