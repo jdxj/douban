@@ -199,13 +199,13 @@ func (w *Wormhole) CaptureBook() {
 	row.Close()
 
 	if start < 0 { //从没运行过
-		start = 0
 		_, err = utils.DB.Exec("insert into log (log, type) values (0, 1)")
 		if err != nil {
 			logs.Logger.Error("%s", err)
 			return
 		}
 	}
+	start++
 
 	stmtLogUpdate, err := utils.DB.Prepare("update log set log=? where type=1")
 	if err != nil {
