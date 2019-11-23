@@ -6,6 +6,7 @@ import (
 )
 
 const (
+	Pause1s = 1 * time.Second
 	Pause2s = 2 * time.Second
 	Pause5s = 5 * time.Second
 )

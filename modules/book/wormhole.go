@@ -197,7 +197,7 @@ func (w *Wormhole) CaptureBook() {
 	}
 	defer stmtBookInsert.Close()
 
-	stmtOpiInsert, err := utils.DB.Prepare("insert into opinion (score, amount, one, two, three, four, five, type, ref)")
+	stmtOpiInsert, err := utils.DB.Prepare("insert into opinion (score, amount, one, two, three, four, five, type, ref) values (?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		logs.Logger.Error("%s", err)
 		return
