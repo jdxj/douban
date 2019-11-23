@@ -2,7 +2,9 @@ package main
 
 import (
 	"douban/modules/book"
+	"douban/utils"
 	"douban/utils/logs"
+	"time"
 )
 
 func main() {
@@ -13,4 +15,8 @@ func main() {
 	}
 
 	wor.Run()
+
+	// 确保其他 goroutine 结束
+	time.Sleep(time.Second)
+	utils.Release()
 }

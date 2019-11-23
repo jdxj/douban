@@ -48,3 +48,17 @@ func GetModeConf() (*ModeConf, error) {
 
 	return modeConf, nil
 }
+
+type EmailConf struct {
+	Username string `ini:"username"`
+	Password string `ini:"password"`
+}
+
+func GetEmailConf() (*EmailConf, error) {
+	emailConf := new(EmailConf)
+	if err := iniFile.Section("email").MapTo(emailConf); err != nil {
+		return nil, err
+	}
+
+	return emailConf, nil
+}

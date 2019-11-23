@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -31,27 +32,30 @@ func NewWormhole() (*Wormhole, error) {
 		return nil, err
 	}
 	w := &Wormhole{
-		Mode: modeConf.Mode,
+		Mode:   modeConf.Mode,
+		signal: make(chan int),
 	}
 	return w, nil
 }
 
 type Wormhole struct {
-	Mode int
+	Mode   int
+	signal chan int
 }
 
 func (w *Wormhole) Run() {
+	defer close(w.signal)
+
 	switch w.Mode {
 	case CaptureBookURLMode:
 		w.CaptureTags()
 	case CaptureBookMode:
+		// 先启动监控 goroutine
+		go w.monitor()
 		w.CaptureBook()
 	default:
 		logs.Logger.Warn("Invalid mode of operation")
 	}
-
-	// todo: 在中断信号中处理
-	utils.DB.Close()
 }
 
 func (w *Wormhole) CaptureTags() {
@@ -388,4 +392,68 @@ func (w *Wormhole) genOpinion(book *Book, doc *goquery.Document) {
 			opinion.One = per
 		}
 	})
+}
+
+// monitor 主要用于监控程序运行状态, 为了能够及时发现程序异常.
+// 同时定时统计一些所抓取数据, 来分析运行效果.
+func (w *Wormhole) monitor() {
+	// 首次启动通知一次
+	go w.takeALook()
+
+	// 每天8点, 20点统计并通知
+	now := time.Now()
+	today8AM := time.Unix(now.Unix()/86400*86400, 0)
+	tom8AM := today8AM.Add(24 * time.Hour)
+	dur := tom8AM.Sub(now)
+
+	timer := time.NewTimer(dur)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-w.signal:
+			logs.Logger.Info("Discovery process has ended")
+			return
+		case <-timer.C:
+			go w.takeALook()
+			timer.Reset(12 * time.Hour)
+		}
+	}
+}
+
+func (w *Wormhole) takeALook() {
+	rows, err := utils.DB.Query("select count(*) from book")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer rows.Close()
+
+	var amount uint64
+	for rows.Next() {
+		if err = rows.Scan(&amount); err != nil {
+			logs.Logger.Error("%s", err)
+			return
+		}
+	}
+
+	rows, err = utils.DB.Query("select log from log where type=1")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer rows.Close()
+
+	var progress uint64
+	for rows.Next() {
+		if err = rows.Scan(&progress); err != nil {
+			logs.Logger.Error("%s", err)
+			return
+		}
+	}
+
+	subject := "book 抓取状态"
+	format := "当前 book 表中有 %d 条数据\n"
+	format += "当前进度为: %d\n"
+	utils.SendEmail(subject, format, amount, progress)
 }

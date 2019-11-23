@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"douban/utils/logs"
 	"strings"
 	"time"
 )
@@ -26,4 +27,10 @@ func CleanAndJoin(s, sep string) string {
 // 并将 s 根据空白分割.
 func CleanAndSplit(s string) []string {
 	return strings.Fields(s)
+}
+
+// Release 在关闭程序前释放一些资源.
+func Release() {
+	DB.Close()
+	logs.Logger.Close()
 }

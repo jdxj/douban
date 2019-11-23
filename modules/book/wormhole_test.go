@@ -125,3 +125,12 @@ func TestSQL(t *testing.T) {
 		panic(err)
 	}
 }
+
+func TestSendEmail(t *testing.T) {
+	w, err := NewWormhole()
+	if err != nil {
+		panic(err)
+	}
+
+	w.takeALook()
+}
