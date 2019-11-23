@@ -183,6 +183,37 @@ func (w *Wormhole) CaptureBook() {
 		return
 	}
 
+	row, err := utils.DB.Query("select log from log where type=1 limit 1")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+
+	var start int64 = -1
+	for row.Next() {
+		if err = row.Scan(&start); err != nil {
+			logs.Logger.Error("%s", err)
+			return
+		}
+	}
+	row.Close()
+
+	if start < 0 { //从没运行过
+		start = 0
+		_, err = utils.DB.Exec("insert into log (log, type) values (0, 1)")
+		if err != nil {
+			logs.Logger.Error("%s", err)
+			return
+		}
+	}
+
+	stmtLogUpdate, err := utils.DB.Prepare("update log set log=? where type=1")
+	if err != nil {
+		logs.Logger.Error("%s", err)
+		return
+	}
+	defer stmtLogUpdate.Close()
+
 	stmtQuery, err := utils.DB.Prepare("select url from book_url order by id limit ?,?")
 	if err != nil {
 		logs.Logger.Error("%s", err)
@@ -205,7 +236,12 @@ func (w *Wormhole) CaptureBook() {
 	defer stmtOpiInsert.Close()
 
 	client := modules.GenHTTPClient()
-	for i := int64(0); i < total; i++ {
+	for i := start; i < total; i++ {
+		// todo: debug
+		if i == 120 {
+			logs.Logger.Debug("insert 120 finish")
+			return
+		}
 		utils.Pause(utils.Pause5s)
 
 		// 只有一行
@@ -248,9 +284,15 @@ func (w *Wormhole) CaptureBook() {
 			continue
 		}
 
-		_, err = stmtOpiInsert.Exec(book.Opinion.ToInsert())
+		_, err = stmtOpiInsert.Exec(book.Opinion.ToInsert()...)
 		if err != nil {
 			logs.Logger.Error("Insert into opinion failed, err: %s", err)
+			continue
+		}
+
+		// book, opinion 都插入后更新记录
+		if _, err = stmtLogUpdate.Exec(i); err != nil {
+			logs.Logger.Error("Update log failed, err: %s", err)
 		}
 	}
 }

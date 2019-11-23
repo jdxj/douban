@@ -73,7 +73,6 @@ type Info struct {
 func (info *Info) Unmarshal(rawInfo string) {
 	rawRows := utils.CleanAndSplit(rawInfo)
 	rawRows = info.clearColon(rawRows)
-	logs.Logger.Debug("length: %d, rawRows: %v", len(rawRows), rawRows)
 
 	var rows []string
 	var kv string
@@ -94,7 +93,6 @@ func (info *Info) Unmarshal(rawInfo string) {
 			rows = append(rows, kv)
 		}
 	}
-	logs.Logger.Debug("length: %d, rows: %v", len(rows), rows)
 
 	for _, row := range rows {
 		cols := strings.Split(row, ":")
